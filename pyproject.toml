@@ -1,0 +1,9 @@
+[project]
+name = "tableau-connections-update"
+version = "0.1.0"
+description = "Tool to automatically update passwords / tokens for all available objects in Tableau Server based on server / username combo."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0.2",
+]
