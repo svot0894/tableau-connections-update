@@ -1,19 +1,21 @@
+# Helper functions for interacting with Tableau Server REST API.
+
 import requests
 import xml.etree.ElementTree as ET
 
 
-def sign_in(server, api_version, pat_name, pat_secret, site=""):
+def sign_in(url: str, pat_name: str, pat_secret: str, site: str) -> tuple:
     """
-    Signs in to the server using a personal access token.
+    Signs in to the Tableau Server using a personal access token.
 
-    'server'      specified server address
+    'url'         base server URL
     'pat_name'    personal access token name
     'pat_secret'  personal access token secret
-    'site'        site content URL (default: "")
+    'site'        site content URL
 
-    Returns the authentication token, site ID, and user ID.
+    Returns the authentication token and site ID.
     """
-    url = f"{server}/api/{api_version}/auth/signin"
+    url = f"{url}/auth/signin"
     xmlns = {'t': 'http://tableau.com/api'}
 
     # Build the request XML
@@ -34,32 +36,35 @@ def sign_in(server, api_version, pat_name, pat_secret, site=""):
     # Parse the response
     parsed_response = ET.fromstring(server_response.text)
 
-    # Get the auth token, site ID, and user ID
+    # Get the auth token and site ID
     token = parsed_response.find('t:credentials', namespaces=xmlns).get('token')
     site_id = parsed_response.find('.//t:site', namespaces=xmlns).get('id')
     return token, site_id
 
-def sign_out(server, api_version, auth_token):
+def sign_out(url: str, auth_token: str) -> None:
     """
-    Destroys the active session and invalidates authentication token.
+    Destroys the active session and deletes authentication token.
 
-    'server'        specified server address
+    'url'           base server URL
     'auth_token'    authentication token that grants user access to API calls
     """
-    url = f"{server}/api/{api_version}/auth/signout"
+    url = f"{url}/auth/signout"
 
     server_response = requests.post(url, headers={'x-tableau-auth': auth_token})
     server_response.raise_for_status()
 
     return
 
-def get_objects(url, site_id, headers, object_type):
+def get_objects(url: str, site_id: str, headers: dict, object_type: str) -> list:
     """
     Fetches all objects of a given type (datasources, flows, workbooks).
+
     'url'          base server URL
     'site_id'      site ID
     'headers'      request headers including auth token
     'object_type'  type of object to fetch (e.g., "datasources", "flows", "workbooks")
+
+    Returns a list of objects.
     """
     url = f"{url}/sites/{site_id}/{object_type}"
     xmlns = {'t': 'http://tableau.com/api'}
@@ -73,14 +78,17 @@ def get_objects(url, site_id, headers, object_type):
 
     return objects
 
-def get_connections(url, site_id, headers, object_type, object_id):
+def get_connections(url: str, site_id: str, headers: dict, object_type: str, object_id: str) -> list:
     """
     Fetches all connections for a given object.
+
     'url'          base server URL
     'site_id'      site ID
     'headers'      request headers including auth token
     'object_type'  type of object (e.g., "datasources", "flows", "workbooks")
     'object_id'    ID of the specific object
+
+    Returns a list of connections.
     """
     url = f"{url}/sites/{site_id}/{object_type}/{object_id}/connections"
     xmlns = {'t': 'http://tableau.com/api'}
@@ -93,9 +101,10 @@ def get_connections(url, site_id, headers, object_type, object_id):
 
     return connections
 
-def update_connection(url, site_id, headers, object_type, object_id, connection_id, payload):
+def update_connection(url: str, site_id: str, headers: dict, object_type: str, object_id: str, connection_id: str, payload: dict) -> requests.Response:
     """
     Updates a specific connection for a given object.
+
     'url'           base server URL
     'site_id'       site ID
     'headers'       request headers including auth token
@@ -103,6 +112,8 @@ def update_connection(url, site_id, headers, object_type, object_id, connection_
     'object_id'     ID of the specific object
     'connection_id' ID of the specific connection to update
     'payload'       dict with connection update details
+
+    Returns the server response.
     """
     url = f"{url}/sites/{site_id}/{object_type}/{object_id}/connections/{connection_id}"
     resp = requests.put(url, headers=headers, json=payload)

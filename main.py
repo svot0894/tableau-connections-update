@@ -31,9 +31,9 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# validate indicator argument
-if not args.indicator and args.environment:
-    raise ValueError("You must provide an indicator / environment argument using -i and")
+# validate arguments
+if not args.indicator or not args.environment:
+    raise ValueError("You must provide both indicator and environment arguments using -i and -e flags.")
 
 # import yaml configs
 config_file_path = f"configs/{args.environment}/config.yml"
@@ -42,44 +42,48 @@ with open(config_file_path, "r") as f:
     config = yaml.load(f, Loader=yaml.SafeLoader)
 
 # logging function
-def log(message):
+def log(message: str) -> None:
     with open(config["log_file"], "a", encoding="utf-8") as log_file:
         log_file.write(f"{datetime.now().isoformat()} - {message}\n")
 
-def main():
+def main() -> None:
     log(f"Starting update for {args.indicator}-based connections in {args.environment}.")
+
+    # Extract configurations
+    tableau_server_confs = config["tableau_server_info"]
+    db_confs = config[f"{args.indicator}_connection_info"]
+
+    # set up base url for REST API calls
+    url = f"{tableau_server_confs["tableau_server"]}/api/{tableau_server_confs["api_version"]}"
 
     # sign in to Tableau Server via REST API and get auth token
     auth_token, site_id = sign_in(
-        server=config["tableau_server_info"]["tableau_server"],
-        api_version=config["tableau_server_info"]["api_version"],
-        pat_name=config["tableau_server_info"]["token_name"],
-        pat_secret=config["tableau_server_info"]["token_secret"],
-        site=config["tableau_server_info"]["site"]
+        url = url,
+        pat_name = tableau_server_confs["token_name"],
+        pat_secret = tableau_server_confs["token_secret"],
+        site = tableau_server_confs["site"]
     )
 
-    # Extract parameters for filtering and updating
-    db_configs = config[f"{args.indicator}_connection_info"]
-
-    db_server_name = db_configs["db_server_name"]
-    db_username = db_configs["db_username"]
-    db_password = db_configs["db_password"]
-
+    # set up request headers
     headers = {
         "X-Tableau-Auth": auth_token,
         "Content-Type": "application/json"
     }
-    url = f"{config["tableau_server_info"]["tableau_server"]}/api/{config["tableau_server_info"]["api_version"]}"
 
+    # get required db connection details
+    db_server_name = db_confs["db_server_name"]
+    db_username = db_confs["db_username"]
+    db_password = db_confs["db_password"]
+
+    # iterate through each object type to update connections
     for obj_type in config["objects"]:
+
         if obj_type not in ["datasources", "flows", "workbooks"]:
             log(f"Skipping unknown object type: {obj_type}")
             continue
 
         log(f"Processing object type: {obj_type}...")
         all_objects = get_objects(url, site_id, headers, obj_type)
-
-        log(f"Found {len(all_objects)} {obj_type} to process.")
 
         for obj in all_objects:
             obj_id = obj.get("id")
@@ -117,9 +121,8 @@ def main():
 
     # sign out to close the session
     sign_out(
-        server=config["tableau_server_info"]["tableau_server"],
-        api_version=config["tableau_server_info"]["api_version"],
-        auth_token=auth_token
+        url = url,
+        auth_token = auth_token
     )
 
     log(f"Completed update for {args.indicator}-based connections in {args.environment}.")
